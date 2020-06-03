@@ -1,0 +1,43 @@
+syntax = "proto2";
+
+// protocol unit
+message BaseCommand {
+    enum Type {
+        CONNECT = 2;
+        CONNECTED = 3;
+
+        PARTITIONED_METADATA = 21;
+    }
+    required Type type = 1;
+    optional CommandConnect connect = 2;
+    optional CommandConnected connected = 3;
+
+    optional CommandPartitionedTopicMetadata partitionMetadata = 21;
+    optional CommandPartitionedTopicMetadataResponse partitionMetadataResponse = 22;
+}
+
+// handshake
+message CommandConnect {
+    required string client_version = 1;
+}
+
+message CommandConnected {
+    required string server_version = 1;
+}
+
+// partitioned topic metadata
+message CommandPartitionedTopicMetadata {
+    required string topic = 1;
+    required uint64 request_id = 2;
+}
+
+message CommandPartitionedTopicMetadataResponse {
+    enum LookupType {
+        Success = 0;
+        Failed = 1;
+    }
+    optional uint32 partitions = 1;
+    required int64 request_id = 2;
+    optional LookupType response = 3;
+    optional string message = 5;
+}
