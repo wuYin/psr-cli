@@ -43,7 +43,7 @@ func (p *partitionProducer) register() error {
 	p.cli = cli
 
 	reqId := p.cli.nextReqId()
-	prodId := p.cli.nextProducerId() // should be global
+	prodId := p.p.cli.nextProducerId() // must be unique for every client host
 	t := pb.BaseCommand_PRODUCER
 	cmd := &pb.BaseCommand{
 		Type: &t,
@@ -107,7 +107,7 @@ func (p *partitionProducer) send(msg *Message) error {
 	if err != nil {
 		return err
 	}
-	pp.Println("produced ", n)
+	pp.Println(p.prodId, "produced ", n)
 	return nil
 }
 
