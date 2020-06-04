@@ -10,6 +10,9 @@ message BaseCommand {
 
         PRODUCER = 5;
 
+        SEND = 6;
+        SEND_RECEIPT = 7;
+
         PRODUCER_SUCCESS = 17;
 
         PARTITIONED_METADATA = 21;
@@ -23,6 +26,8 @@ message BaseCommand {
     optional CommandConnected connected = 3;
 
     optional CommandProducer producer = 5;
+    optional CommandSend send = 6;
+    optional CommandSendReceipt send_receipt = 7;
 
     optional CommandProducerSuccess producer_success = 17;
 
@@ -97,4 +102,35 @@ message CommandProducer {
 message CommandProducerSuccess {
     required uint64 request_id = 1;
     required string producer_name = 2;
+}
+
+// message
+message SingleMessageMetadata {
+    required int32 payload_size = 3;
+}
+
+message MessageMetadata {
+    required string producer_name = 1;
+    required uint64 sequence_id = 2;
+    required uint64 publish_time = 3;
+}
+
+// send
+message CommandSend {
+    required uint64 producer_id = 1;
+    required uint64 sequence_id = 2;
+    optional int32 num_message = 3 [default = 1];
+}
+
+message CommandSendReceipt {
+    required uint64 producer_id = 1; // double check
+    required uint64 sequence_id = 2;
+    optional MessageIdData message_id = 3;
+}
+
+message MessageIdData {
+    required uint64 ledgerId = 1;
+    required uint64 entryId = 2;
+    optional int32 partition = 3 [default = -1]; // not partitioned
+    optional int32 batch_index = 4 [default = -1];
 }

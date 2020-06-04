@@ -57,11 +57,15 @@ func (c *Client) handshake() error {
 }
 
 func (c *Client) sendCmd(cmd *pb.BaseCommand) (*pb.BaseCommand, error) {
-	c.write(cmd)
-	return c.read()
+	c.writeCmd(cmd)
+	return c.readCmd()
 }
 
-func (c *Client) write(cmd *pb.BaseCommand) error {
+func (c *Client) sendPkg(pkg []byte) (int, error) {
+	return c.conn.Write(pkg)
+}
+
+func (c *Client) writeCmd(cmd *pb.BaseCommand) error {
 	buf, err := wrap(cmd)
 	if err != nil {
 		return err
@@ -72,22 +76,22 @@ func (c *Client) write(cmd *pb.BaseCommand) error {
 	return nil
 }
 
-func (c *Client) read() (*pb.BaseCommand, error) {
-	buf, err := c.recv(4)
+func (c *Client) readCmd() (*pb.BaseCommand, error) {
+	buf, err := c.read(4)
 	if err != nil {
 		return nil, err
 	}
 
 	var frameSize, cmdSize uint32
 	frameSize = binary.BigEndian.Uint32(buf)
-	buf, err = c.recv(4)
+	buf, err = c.read(4)
 	if err != nil {
 		return nil, err
 	}
 	_ = frameSize
 
 	cmdSize = binary.BigEndian.Uint32(buf)
-	buf, err = c.recv(int(cmdSize))
+	buf, err = c.read(int(cmdSize))
 	if err != nil {
 		return nil, err
 	}
@@ -95,7 +99,7 @@ func (c *Client) read() (*pb.BaseCommand, error) {
 	return unwrap(buf)
 }
 
-func (c *Client) recv(size int) ([]byte, error) {
+func (c *Client) read(size int) ([]byte, error) {
 	if len(c.buf) > size {
 		res := cp(c.buf[:size])
 		c.buf = c.buf[size:]
@@ -147,10 +151,4 @@ func wrap(cmd *pb.BaseCommand) ([]byte, error) {
 	}
 	buf = append(buf, data...)
 	return buf, nil
-}
-
-func cp(src []byte) []byte {
-	dst := make([]byte, len(src))
-	copy(dst, src)
-	return dst
 }
