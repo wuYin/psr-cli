@@ -1,4 +1,4 @@
-package core
+package psr
 
 import (
 	"github.com/stretchr/testify/assert"

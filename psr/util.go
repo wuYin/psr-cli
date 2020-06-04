@@ -1,4 +1,4 @@
-package core
+package psr
 
 func cp(src []byte) []byte {
 	dst := make([]byte, len(src))
