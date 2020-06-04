@@ -1,22 +1,45 @@
 syntax = "proto2";
 
-// protocol unit
+/*
+ * package protocol
+ */
 message BaseCommand {
     enum Type {
         CONNECT = 2;
         CONNECTED = 3;
 
+        PRODUCER = 5;
+
+        PRODUCER_SUCCESS = 17;
+
         PARTITIONED_METADATA = 21;
+        PARTITIONED_METADATA_RESPONSE = 22;
+
+        Lookup = 23;
+        LookupResponse = 24;
     }
     required Type type = 1;
     optional CommandConnect connect = 2;
     optional CommandConnected connected = 3;
 
+    optional CommandProducer producer = 5;
+
+    optional CommandProducerSuccess producer_success = 17;
+
     optional CommandPartitionedTopicMetadata partitionMetadata = 21;
     optional CommandPartitionedTopicMetadataResponse partitionMetadataResponse = 22;
+
+    optional CommandLookupTopic lookupTopic = 23;
+    optional CommandLookupTopicResponse lookupTopicResponse = 24;
 }
 
-// handshake
+/*
+ *
+ * client <--- commands ---> broker / proxy
+ *
+ */
+
+// handshake logic connection
 message CommandConnect {
     required string client_version = 1;
 }
@@ -40,4 +63,38 @@ message CommandPartitionedTopicMetadataResponse {
     required int64 request_id = 2;
     optional LookupType response = 3;
     optional string message = 5;
+}
+
+// lookup topic broker
+message CommandLookupTopic {
+    required string topic = 1;
+    required uint64 request_id = 2;
+}
+
+message CommandLookupTopicResponse {
+    enum LookupType {
+        Redirect = 0;
+        Connect = 1;
+        Failed = 2;
+    }
+    optional string brokerServiceUrl = 1; // empty if lookup failed
+    optional string brokerServiceUrlTls = 2;
+    optional LookupType response = 3;
+    required uint64 request_id = 4;
+
+    optional string message = 7;
+}
+
+// register producer
+message CommandProducer {
+    required string topic = 1;
+    required uint64 producer_id = 2;
+    required uint64 request_id = 3;
+
+    optional string producer_name = 4;
+}
+
+message CommandProducerSuccess {
+    required uint64 request_id = 1;
+    required string producer_name = 2;
 }
