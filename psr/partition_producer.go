@@ -110,6 +110,23 @@ func (p *partitionProducer) send(msg *message) error {
 	return nil
 }
 
+func (p *partitionProducer) close() {
+	t := pb.BaseCommand_CLOSE_PRODUCER
+	cmd := &pb.BaseCommand{
+		Type: &t,
+		CloseProducer: &pb.CommandCloseProducer{
+			ProducerId: proto.Uint64(p.prodId),
+			RequestId:  proto.Uint64(p.cli.nextReqId()),
+		},
+	}
+	resp, err := p.cli.sendCmd(cmd)
+	if err != nil {
+		pp.Printf("close producer %d failed", p.prodId)
+		return
+	}
+	_ = resp
+}
+
 func (p *partitionProducer) nextSeqId() uint64 {
 	return atomic.AddUint64(&p.seqId, 1)
 }

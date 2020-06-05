@@ -6,8 +6,9 @@ import (
 )
 
 func main() {
-	m := psr.NewProducer("127.0.0.1:6650", "persistent://psr/default/topic-01")
-	msgId, err := m.Send(psr.NewMsg([]byte("A")))
+	p := psr.NewProducer("127.0.0.1:6650", "persistent://psr/default/topic-01")
+	defer p.Close()
+	msgId, err := p.Send(psr.NewMsg([]byte("A")))
 	if err != nil {
 		panic(err)
 	}

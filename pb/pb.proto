@@ -22,6 +22,8 @@ message BaseCommand {
         SUCCESS = 13; // general operation results
         ERROR = 14;
 
+        CLOSE_PRODUCER = 15;
+
         PRODUCER_SUCCESS = 17;
 
         PARTITIONED_METADATA = 21;
@@ -45,6 +47,7 @@ message BaseCommand {
 
     optional CommandSuccess success = 13;
     optional CommandError error = 14;
+    optional CommandCloseProducer close_producer = 15;
 
     optional CommandProducerSuccess producer_success = 17;
 
@@ -165,6 +168,12 @@ message CommandSendReceipt {
     required uint64 producer_id = 1; // double check
     required uint64 sequence_id = 2;
     optional MessageIdData message_id = 3;
+}
+
+// close
+message CommandCloseProducer {
+    required uint64 producer_id = 1;
+    required uint64 request_id = 2;
 }
 
 //

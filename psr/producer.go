@@ -62,6 +62,12 @@ func (p *Producer) Send(msg *message) (*messageID, error) {
 	return nil, errors.New("invalid produce resp")
 }
 
+func (p *Producer) Close() {
+	for _, pp := range p.ps {
+		pp.close()
+	}
+}
+
 func (p *Producer) initPartitionProducers() error {
 	topics, err := p.cli.partitionTopics(p.topic)
 	if err != nil {
