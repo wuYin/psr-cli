@@ -29,8 +29,8 @@ message BaseCommand {
         PARTITIONED_METADATA = 21;
         PARTITIONED_METADATA_RESPONSE = 22;
 
-        Lookup = 23;
-        LookupResponse = 24;
+        LOOKUP = 23;
+        LOOKUP_RESPONSE = 24;
 
         CONSUMER_STATS_RESPONSE = 26;
     }

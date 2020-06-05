@@ -68,7 +68,7 @@ func (c *Connection) eventloop() {
 				c.queue[handshakeReqId].notifyCh <- r
 			case pb.BaseCommand_PARTITIONED_METADATA_RESPONSE: // partitions
 				c.queue[r.cmd.GetPartitionMetadataResponse().GetRequestId()].notifyCh <- r
-			case pb.BaseCommand_LookupResponse:
+			case pb.BaseCommand_LOOKUP_RESPONSE:
 				c.queue[r.cmd.GetLookupTopicResponse().GetRequestId()].notifyCh <- r
 			case pb.BaseCommand_PRODUCER_SUCCESS:
 				c.queue[r.cmd.GetProducerSuccess().GetRequestId()].notifyCh <- r

@@ -34,7 +34,7 @@ func newPartitionProducer(p *Producer, topic string, partition int) *partitionPr
 }
 
 func (p *partitionProducer) register() error {
-	// delegate manager to lookup
+	// delegate parent producer to lookup
 	broker, err := p.p.lp.lookup(p.topic)
 	if err != nil {
 		return err

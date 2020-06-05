@@ -18,7 +18,7 @@ func newLookuper(cli *Client) *Lookuper {
 }
 
 func (l *Lookuper) lookup(topic string) (*url.URL, error) {
-	t := pb.BaseCommand_Lookup
+	t := pb.BaseCommand_LOOKUP
 	reqId := l.cli.nextReqId()
 	cmd := &pb.BaseCommand{
 		Type: &t,
