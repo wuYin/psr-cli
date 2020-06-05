@@ -8,4 +8,4 @@ Reference
 Schedule
 
 - [x] basic produce
-- [ ] basic consume
+- [x] basic consume
