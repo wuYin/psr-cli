@@ -30,14 +30,15 @@ type Connection struct {
 	recvCh chan *recvResp
 	queue  map[uint64]*sendReq // reqId -> notifyCh
 
-	receiptCh chan *messageID // dispatch message receipt
+	receiptCh chan *messageID // dispatch message receipt to producer
+	msgsCh    chan []*message // dispatch messages to consumer
 }
 
 var (
 	handshakeReqId uint64 = 0 // only for queue key usage
 )
 
-func NewConnection(conn net.Conn, receiptCh chan *messageID) (*Connection, error) {
+func NewConnection(conn net.Conn, receiptCh chan *messageID, msgsCh chan []*message) (*Connection, error) {
 	c := &Connection{
 		conn:   conn,
 		buf:    nil,
@@ -46,6 +47,7 @@ func NewConnection(conn net.Conn, receiptCh chan *messageID) (*Connection, error
 		queue:  make(map[uint64]*sendReq),
 
 		receiptCh: receiptCh,
+		msgsCh:    msgsCh,
 	}
 	go c.eventloop()
 
@@ -75,16 +77,25 @@ func (c *Connection) eventloop() {
 			case pb.BaseCommand_SEND_RECEIPT:
 				mid := r.cmd.GetSendReceipt().GetMessageId()
 				c.receiptCh <- &messageID{
-					// partitionIdx: int(mid.GetPartition()), // it's empty, must be filled by partition producer itself
-					ledgerId: int64(mid.GetLedgerId()),
-					// batchIdx:     int(mid.GetBatchIndex()),
-					entryId: int64(mid.GetEntryId()),
+					partitionIdx: -1, // it's empty, must be filled by partitioned producer itself
+					ledgerId:     int64(mid.GetLedgerId()),
+					batchIdx:     -1,
+					entryId:      int64(mid.GetEntryId()),
 				}
+			case pb.BaseCommand_MESSAGE:
+				msgs, err := unserializeBatch(r.cmd.GetMessage(), r.payload)
+				if err != nil {
+					pp.Println("unserialized failed: ", err)
+					return
+				}
+				c.msgsCh <- msgs
 			default:
 				pp.Println("ignored pkg type:", r.cmd.GetType())
 			}
 		case req := <-c.sendCh:
-			c.queue[*req.reqId] = req // pending
+			if req.reqId != nil {
+				c.queue[*req.reqId] = req // shot cmd never enqueue
+			}
 			err := c.writeCmd(req.cmd)
 			if err != nil {
 				pp.Println("conn write cmd failed:", err)
@@ -101,6 +112,10 @@ func (c *Connection) handshake() error {
 		Type: &t,
 		Connect: &pb.CommandConnect{
 			ClientVersion: proto.String("Pulsar Go 0.1"),
+			// https://github.com/apache/pulsar/blob/branch-2.5/pulsar-broker/src/main/java/org/apache/pulsar/broker/service/Consumer.java#L262
+			// for compatibility, different versions of the protocol return different data from broker
+			// such as, in lower version, broker not return checksum
+			ProtocolVersion: proto.Int32(int32(pb.ProtocolVersion_v13)),
 		},
 	}
 
@@ -134,6 +149,10 @@ func (c *Connection) sendCmd(reqId uint64, cmd *pb.BaseCommand) (*pb.BaseCommand
 	return resp.cmd, resp.err
 }
 
+func (c *Connection) shotCmd(cmd *pb.BaseCommand) {
+	c.sendCh <- &sendReq{cmd: cmd}
+}
+
 func (c *Connection) sendPkg(pkg []byte) (int, error) {
 	return c.conn.Write(pkg)
 }
@@ -151,7 +170,7 @@ func (c *Connection) writeCmd(cmd *pb.BaseCommand) error {
 	return nil
 }
 
-// [frame_size] [cmd_size] [cmd] [response payload]
+// [frame_size] [cmd_size] [cmd] [single_messages_payload]
 func (c *Connection) readCmd() {
 	for {
 		buf, err := c.read(4)
@@ -167,7 +186,6 @@ func (c *Connection) readCmd() {
 			pp.Println("read frame failed:", err)
 			continue
 		}
-		_ = frameSize
 
 		cmdSize = binary.BigEndian.Uint32(buf)
 		buf, err = c.read(int(cmdSize))
@@ -184,7 +202,7 @@ func (c *Connection) readCmd() {
 		}
 
 		var payload []byte = nil
-		payloadSize := frameSize - (cmdSize + 4)
+		payloadSize := frameSize - (4 + cmdSize)
 		if payloadSize > 0 {
 			// read resp payload
 			payload, err = c.read(int(payloadSize))
@@ -203,7 +221,7 @@ func (c *Connection) readCmd() {
 }
 
 func (c *Connection) read(size int) ([]byte, error) {
-	if len(c.buf) > size {
+	if len(c.buf) >= size {
 		res := cp(c.buf[:size])
 		c.buf = c.buf[size:]
 		return res, nil

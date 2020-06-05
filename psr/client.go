@@ -16,12 +16,12 @@ type Client struct {
 	conn   *Connection
 }
 
-func newClient(addr string, receiptCh chan *messageID) (*Client, error) {
+func newClient(addr string, receiptCh chan *messageID, msgsCh chan []*message) (*Client, error) {
 	conn, err := net.Dial("tcp", addr)
 	if err != nil {
 		return nil, err
 	}
-	logicConn, err := NewConnection(conn, receiptCh)
+	logicConn, err := NewConnection(conn, receiptCh, msgsCh)
 	if err != nil {
 		return nil, err
 	}

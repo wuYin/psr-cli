@@ -17,7 +17,7 @@ type Producer struct {
 }
 
 func NewProducer(broker, topic string) *Producer {
-	cli, err := newClient(broker, nil)
+	cli, err := newClient(broker, nil, nil)
 	if err != nil {
 		panic(err)
 	}

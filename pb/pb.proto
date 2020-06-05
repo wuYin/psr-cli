@@ -83,6 +83,7 @@ message CommandError {
 // handshake logic connection
 message CommandConnect {
     required string client_version = 1;
+    optional int32 protocol_version = 4; // broker will treat different proto version clients
 }
 
 message CommandConnected {
@@ -188,7 +189,7 @@ message MessageIdData {
     required uint64 ledgerId = 1;
     required uint64 entryId = 2;
     optional int32 partition = 3 [default = -1]; // not partitioned
-    optional int32 batch_index = 4 [default = -1];
+    optional int32 batch_index = 4 [default = -1]; // not batched
 }
 
 //
@@ -257,4 +258,9 @@ enum ServerError {
 
     TransactionCoordinatorNotFound = 20; // Transaction coordinator not found error
     InvalidTxnStatus = 21; // Invalid txn status error
+}
+
+enum ProtocolVersion {
+    v13 = 13; // Schema-registry : added avro schema format for json
+    v14 = 14; // Added Key_Shared subscription
 }

@@ -1,12 +1,10 @@
 package psr
 
 import (
-	"encoding/binary"
 	"github.com/golang/protobuf/proto"
 	"github.com/k0kubun/pp"
 	"psr-cli/pb"
 	"sync/atomic"
-	"time"
 )
 
 type partitionProducer struct {
@@ -40,7 +38,7 @@ func (p *partitionProducer) register() error {
 		return err
 	}
 
-	cli, err := newClient(broker.Host, p.receiptCh)
+	cli, err := newClient(broker.Host, p.receiptCh, nil)
 	if err != nil {
 		return err
 	}
@@ -79,22 +77,7 @@ func (p *partitionProducer) transferReceipts() {
 // send serialized pkg to broker directly
 // notice: send operation is async, so message pkg does not contain a requestId, it's unnecessary
 func (p *partitionProducer) send(msg *message) error {
-	// single msg meta
-	singleMeta := &pb.SingleMessageMetadata{
-		PayloadSize: proto.Int32(int32(len(msg.payload))),
-	}
-	rawMeta, err := proto.Marshal(singleMeta)
-	if err != nil {
-		return err
-	}
-
-	// single msg as batch payload
-	payload := make([]byte, 4)
-	binary.BigEndian.PutUint32(payload, uint32(len(rawMeta)))
-	payload = append(payload, rawMeta...)
-	payload = append(payload, msg.payload...)
-
-	// send cmd
+	// cmd send
 	seqId := p.nextSeqId()
 	t := pb.BaseCommand_SEND
 	sendCmd := &pb.BaseCommand{
@@ -110,10 +93,16 @@ func (p *partitionProducer) send(msg *message) error {
 	msgMeta := &pb.MessageMetadata{
 		ProducerName: proto.String(p.name),
 		SequenceId:   proto.Uint64(seqId),
-		PublishTime:  proto.Uint64(uint64(time.Now().UnixNano() / int64(time.Millisecond))), // current ms ts
+		PublishTime:  proto.Uint64(uint64(nowMsTs())), // current ms ts
 	}
 
-	// serialized to batch raw pkg
+	// produce content as a single msg
+	payload, err := serializeSingleMsg(msg.content)
+	if err != nil {
+		return err
+	}
+
+	// serialized to batch to raw pkg
 	batch, err := serializeBatch(sendCmd, msgMeta, payload)
 	if err != nil {
 		return err

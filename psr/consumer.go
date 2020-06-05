@@ -1,6 +1,7 @@
 package psr
 
 import (
+	"github.com/k0kubun/pp"
 	"sync/atomic"
 )
 
@@ -12,12 +13,12 @@ type Consumer struct {
 	lp      *Lookuper
 	subName string // subscription name
 
-	msgCh chan *message
-	cid   uint64
+	msgsCh chan []*message
+	cid    uint64
 }
 
 func NewConsumer(broker, topic, subName string) *Consumer {
-	cli, err := newClient(broker, nil)
+	cli, err := newClient(broker, nil, nil)
 	if err != nil {
 		panic(err)
 	}
@@ -27,7 +28,7 @@ func NewConsumer(broker, topic, subName string) *Consumer {
 		cli:     cli,
 		lp:      newLookuper(cli),
 		subName: subName,
-		msgCh:   make(chan *message, 100),
+		msgsCh:  make(chan []*message, 100),
 		cid:     0,
 	}
 
@@ -35,6 +36,14 @@ func NewConsumer(broker, topic, subName string) *Consumer {
 		panic(err)
 	}
 	return c
+}
+
+func (c *Consumer) Receive() (*message, error) {
+	msgs := <-c.msgsCh
+	if len(msgs) > 1 {
+		pp.Println("overload: ", len(msgs))
+	}
+	return msgs[0], nil
 }
 
 func (c *Consumer) initPartitionConsumers() error {
