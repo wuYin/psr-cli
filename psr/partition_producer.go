@@ -17,6 +17,8 @@ type partitionProducer struct {
 	seqId     uint64
 	prodId    uint64
 	partition int
+
+	receiptCh chan *messageID
 }
 
 func newPartitionProducer(p *Producer, topic string, partition int) *partitionProducer {
@@ -26,6 +28,8 @@ func newPartitionProducer(p *Producer, topic string, partition int) *partitionPr
 		seqId:     0,
 		prodId:    p.nextProdId(), // must be unique for every client host
 		partition: partition,
+
+		receiptCh: make(chan *messageID, 10),
 	}
 }
 
@@ -36,7 +40,7 @@ func (p *partitionProducer) register() error {
 		return err
 	}
 
-	cli, err := newClient(broker.Host)
+	cli, err := newClient(broker.Host, p.receiptCh)
 	if err != nil {
 		return err
 	}
@@ -53,14 +57,27 @@ func (p *partitionProducer) register() error {
 			ProducerName: nil, // use broker distributed
 		},
 	}
-	resp, err := p.cli.conn.sendCmd(cmd)
+	resp, err := p.cli.conn.sendCmd(reqId, cmd)
 	if err != nil {
 		return err
 	}
 	p.name = *resp.ProducerSuccess.ProducerName
+
+	go p.transferReceipts()
 	return nil
 }
 
+func (p *partitionProducer) transferReceipts() {
+	for {
+		receipt := <-p.receiptCh
+		receipt.partitionIdx = p.partition
+		receipt.batchIdx = -1
+		p.p.receiptCh <- receipt
+	}
+}
+
+// send serialized pkg to broker directly
+// notice: send operation is async, so message pkg does not contain a requestId, it's unnecessary
 func (p *partitionProducer) send(msg *message) error {
 	// single msg meta
 	singleMeta := &pb.SingleMessageMetadata{
@@ -106,25 +123,27 @@ func (p *partitionProducer) send(msg *message) error {
 	if err != nil {
 		return err
 	}
-	pp.Println(p.prodId, "produced ", n)
+	_ = n
 	return nil
 }
 
 func (p *partitionProducer) close() {
 	t := pb.BaseCommand_CLOSE_PRODUCER
+	reqId := p.cli.nextReqId()
 	cmd := &pb.BaseCommand{
 		Type: &t,
 		CloseProducer: &pb.CommandCloseProducer{
 			ProducerId: proto.Uint64(p.prodId),
-			RequestId:  proto.Uint64(p.cli.nextReqId()),
+			RequestId:  proto.Uint64(reqId),
 		},
 	}
-	resp, err := p.cli.conn.sendCmd(cmd)
+	resp, err := p.cli.conn.sendCmd(reqId, cmd)
 	if err != nil {
 		pp.Printf("close producer %d failed", p.prodId)
 		return
 	}
 	_ = resp
+	pp.Printf("producer %s closed\n", int(p.prodId))
 }
 
 func (p *partitionProducer) nextSeqId() uint64 {

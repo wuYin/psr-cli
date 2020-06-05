@@ -1,6 +1,9 @@
 package psr
 
-import "time"
+import (
+	"fmt"
+	"time"
+)
 
 func NewMsg(payload []byte) *message {
 	return &message{
@@ -17,7 +20,11 @@ type message struct {
 // message -> [partition, ledger, batch, entry]
 type messageID struct {
 	partitionIdx int
-	ledgerId     uint64
+	ledgerId     int64
 	batchIdx     int
-	entryId      uint64
+	entryId      int64
+}
+
+func (m *messageID) String() string {
+	return fmt.Sprintf("[%d, %d, %d %d]", m.partitionIdx, m.ledgerId, m.batchIdx, m.entryId)
 }

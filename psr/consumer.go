@@ -17,7 +17,7 @@ type Consumer struct {
 }
 
 func NewConsumer(broker, topic, subName string) *Consumer {
-	cli, err := newClient(broker)
+	cli, err := newClient(broker, nil)
 	if err != nil {
 		panic(err)
 	}

@@ -16,12 +16,12 @@ type Client struct {
 	conn   *Connection
 }
 
-func newClient(addr string) (*Client, error) {
+func newClient(addr string, receiptCh chan *messageID) (*Client, error) {
 	conn, err := net.Dial("tcp", addr)
 	if err != nil {
 		return nil, err
 	}
-	logicConn, err := NewConnection(conn)
+	logicConn, err := NewConnection(conn, receiptCh)
 	if err != nil {
 		return nil, err
 	}
@@ -42,7 +42,7 @@ func (c *Client) partitionTopics(topic string) ([]string, error) {
 			RequestId: proto.Uint64(reqId),
 		},
 	}
-	resp, err := c.conn.sendCmd(cmd)
+	resp, err := c.conn.sendCmd(reqId, cmd)
 	if err != nil {
 		return nil, err
 	}

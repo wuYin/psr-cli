@@ -104,7 +104,7 @@ message CommandPartitionedTopicMetadataResponse {
         Failed = 1;
     }
     optional uint32 partitions = 1;
-    required int64 request_id = 2;
+    required uint64 request_id = 2;
     optional LookupType response = 3;
     optional string message = 5;
 }
@@ -165,7 +165,7 @@ message CommandSend {
 }
 
 message CommandSendReceipt {
-    required uint64 producer_id = 1; // double check
+    required uint64 producer_id = 1; // producer --> client --> broker --> client --> producer
     required uint64 sequence_id = 2;
     optional MessageIdData message_id = 3;
 }
@@ -180,7 +180,7 @@ message CommandCloseProducer {
 // message
 //
 message CommandMessage {
-    required uint64 consumer_id = 1;
+    required uint64 consumer_id = 1; // broker --> client --> consumer
     required MessageIdData message_id = 2;
 }
 
