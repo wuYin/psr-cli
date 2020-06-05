@@ -27,7 +27,7 @@ func (l *Lookuper) lookup(topic string) (*url.URL, error) {
 			Topic:     &topic,
 		},
 	}
-	resp, err := l.cli.sendCmd(cmd)
+	resp, err := l.cli.conn.sendCmd(cmd)
 	if err != nil {
 		return nil, err
 	}

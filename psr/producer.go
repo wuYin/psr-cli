@@ -46,7 +46,7 @@ func (p *Producer) Send(msg *message) (*messageID, error) {
 	}
 
 	// wait receipt
-	cmd, _, err := pp.cli.readCmd()
+	cmd, _, err := pp.cli.conn.readCmd()
 	if err != nil {
 		return nil, err
 	}

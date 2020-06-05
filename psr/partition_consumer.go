@@ -56,7 +56,7 @@ func (c *partitionConsumer) recvLoop() {
 func (c *partitionConsumer) recvMsgs() {
 	for {
 		// FIXME: panic here for using same client but mixed up sync and async rw
-		cmd, payload, err := c.cli.readCmd()
+		cmd, payload, err := c.cli.conn.readCmd()
 		if err != nil {
 			pp.Println("consumer recv failed: ", err)
 			break
@@ -80,7 +80,7 @@ func (c *partitionConsumer) flow(permit uint32) {
 			MessagePermits: proto.Uint32(permit),
 		},
 	}
-	_, err := c.cli.sendCmd(cmd)
+	_, err := c.cli.conn.sendCmd(cmd)
 	if err != nil {
 		pp.Println("flow failed: ", err)
 	}
@@ -113,7 +113,7 @@ func (c *partitionConsumer) register() error {
 			InitialPosition: &latest,
 		},
 	}
-	resp, err := c.cli.sendCmd(cmd)
+	resp, err := c.cli.conn.sendCmd(cmd)
 	if err != nil {
 		return err
 	}

@@ -53,7 +53,7 @@ func (p *partitionProducer) register() error {
 			ProducerName: nil, // use broker distributed
 		},
 	}
-	resp, err := p.cli.sendCmd(cmd)
+	resp, err := p.cli.conn.sendCmd(cmd)
 	if err != nil {
 		return err
 	}
@@ -102,7 +102,7 @@ func (p *partitionProducer) send(msg *message) error {
 		return err
 	}
 
-	n, err := p.cli.sendPkg(batch)
+	n, err := p.cli.conn.sendPkg(batch)
 	if err != nil {
 		return err
 	}
@@ -119,7 +119,7 @@ func (p *partitionProducer) close() {
 			RequestId:  proto.Uint64(p.cli.nextReqId()),
 		},
 	}
-	resp, err := p.cli.sendCmd(cmd)
+	resp, err := p.cli.conn.sendCmd(cmd)
 	if err != nil {
 		pp.Printf("close producer %d failed", p.prodId)
 		return

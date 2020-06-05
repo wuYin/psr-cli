@@ -4,7 +4,33 @@ import (
 	"encoding/binary"
 	"github.com/golang/protobuf/proto"
 	"hash/crc32"
+	"psr-cli/pb"
 )
+
+// cmd codec
+func unwrapCmd(buf []byte) (*pb.BaseCommand, error) {
+	var cmd pb.BaseCommand
+	if err := proto.Unmarshal(buf, &cmd); err != nil {
+		return nil, err
+	}
+	return &cmd, nil
+}
+
+func wrapCmd(cmd *pb.BaseCommand) ([]byte, error) {
+	// [frame_size] [cmd_size] [cmd]
+	cmdSize := uint32(proto.Size(cmd))
+	frameSize := cmdSize + 4
+	buf := make([]byte, 4+4)
+	binary.BigEndian.PutUint32(buf, frameSize)
+	binary.BigEndian.PutUint32(buf[4:], cmdSize)
+
+	data, err := proto.Marshal(cmd)
+	if err != nil {
+		return nil, err
+	}
+	buf = append(buf, data...)
+	return buf, nil
+}
 
 // wrap as protocol package bytes
 func serializeBatch(send proto.Message, meta proto.Message, payload []byte) ([]byte, error) {
