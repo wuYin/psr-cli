@@ -2,8 +2,6 @@ package psr
 
 import (
 	"errors"
-	"fmt"
-	"github.com/golang/protobuf/proto"
 	"psr-cli/pb"
 	"sync/atomic"
 	"time"
@@ -36,7 +34,7 @@ func NewProducer(broker, topic string) *Producer {
 	return m
 }
 
-func (p *Producer) Send(msg *Message) (*MessageID, error) {
+func (p *Producer) Send(msg *message) (*messageID, error) {
 	if len(p.ps) == 0 {
 		return nil, errors.New("no producer available")
 	}
@@ -48,13 +46,13 @@ func (p *Producer) Send(msg *Message) (*MessageID, error) {
 	}
 
 	// wait receipt
-	cmd, err := pp.cli.readCmd()
+	cmd, _, err := pp.cli.readCmd()
 	if err != nil {
 		return nil, err
 	}
 	if cmd.GetType() == pb.BaseCommand_SEND_RECEIPT {
 		m := cmd.GetSendReceipt().GetMessageId()
-		return &MessageID{
+		return &messageID{
 			partitionIdx: pp.partition,
 			ledgerId:     *m.LedgerId,
 			batchIdx:     -1, // not batch actually
@@ -65,7 +63,7 @@ func (p *Producer) Send(msg *Message) (*MessageID, error) {
 }
 
 func (p *Producer) initPartitionProducers() error {
-	topics, err := p.partitionTopics()
+	topics, err := p.cli.partitionTopics(p.topic)
 	if err != nil {
 		return err
 	}
@@ -77,42 +75,6 @@ func (p *Producer) initPartitionProducers() error {
 		p.ps = append(p.ps, pp)
 	}
 	return nil
-}
-
-func (p *Producer) partitionTopics() ([]string, error) {
-	n, err := p.partitions()
-	if err != nil {
-		return nil, err
-	}
-	if n == 1 {
-		return []string{p.topic}, nil
-	}
-
-	topics := make([]string, n)
-	for i := 0; i < n; i++ {
-		topics[i] = fmt.Sprintf("%s-partition-%d", p.topic, i)
-	}
-	return topics, nil
-}
-
-func (p *Producer) partitions() (int, error) {
-	reqId := p.cli.nextReqId()
-	t := pb.BaseCommand_PARTITIONED_METADATA
-	cmd := &pb.BaseCommand{
-		Type: &t,
-		PartitionMetadata: &pb.CommandPartitionedTopicMetadata{
-			Topic:     proto.String(p.topic),
-			RequestId: proto.Uint64(reqId),
-		},
-	}
-	resp, err := p.cli.sendCmd(cmd)
-	if err != nil {
-		return 0, err
-	}
-	if resp.PartitionMetadataResponse == nil {
-		return 0, errors.New("empty topic metadata resp")
-	}
-	return int(*resp.PartitionMetadataResponse.Partitions), nil
 }
 
 func (p *Producer) nextProdId() uint64 {

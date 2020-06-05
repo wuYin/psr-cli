@@ -24,7 +24,7 @@ func newPartitionProducer(p *Producer, topic string, partition int) *partitionPr
 		p:         p,
 		topic:     topic,
 		seqId:     0,
-		prodId:    p.nextProdId(),
+		prodId:    p.nextProdId(), // must be unique for every client host
 		partition: partition,
 	}
 }
@@ -43,13 +43,12 @@ func (p *partitionProducer) register() error {
 	p.cli = cli
 
 	reqId := p.cli.nextReqId()
-	prodId := p.p.cli.nextProducerId() // must be unique for every client host
 	t := pb.BaseCommand_PRODUCER
 	cmd := &pb.BaseCommand{
 		Type: &t,
 		Producer: &pb.CommandProducer{
 			Topic:        proto.String(p.topic),
-			ProducerId:   &prodId,
+			ProducerId:   proto.Uint64(p.prodId),
 			RequestId:    &reqId,
 			ProducerName: nil, // use broker distributed
 		},
@@ -62,10 +61,10 @@ func (p *partitionProducer) register() error {
 	return nil
 }
 
-func (p *partitionProducer) send(msg *Message) error {
+func (p *partitionProducer) send(msg *message) error {
 	// single msg meta
 	singleMeta := &pb.SingleMessageMetadata{
-		PayloadSize: proto.Int32(int32(len(msg.Payload))),
+		PayloadSize: proto.Int32(int32(len(msg.payload))),
 	}
 	rawMeta, err := proto.Marshal(singleMeta)
 	if err != nil {
@@ -76,7 +75,7 @@ func (p *partitionProducer) send(msg *Message) error {
 	payload := make([]byte, 4)
 	binary.BigEndian.PutUint32(payload, uint32(len(rawMeta)))
 	payload = append(payload, rawMeta...)
-	payload = append(payload, msg.Payload...)
+	payload = append(payload, msg.payload...)
 
 	// send cmd
 	seqId := p.nextSeqId()

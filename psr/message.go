@@ -1,11 +1,21 @@
 package psr
 
-type Message struct {
-	Payload []byte
+import "time"
+
+func NewMsg(payload []byte) *message {
+	return &message{
+		payload: payload,
+	}
+}
+
+type message struct {
+	publishTim time.Time
+	msgId      messageID
+	payload    []byte
 }
 
 // message -> [partition, ledger, batch, entry]
-type MessageID struct {
+type messageID struct {
 	partitionIdx int
 	ledgerId     uint64
 	batchIdx     int

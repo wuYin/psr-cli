@@ -1,5 +1,7 @@
 syntax = "proto2";
 
+option go_package = ".;pb";
+
 /*
  * package protocol
  */
@@ -8,10 +10,17 @@ message BaseCommand {
         CONNECT = 2;
         CONNECTED = 3;
 
+        SUBSCRIBE = 4;
         PRODUCER = 5;
 
         SEND = 6;
         SEND_RECEIPT = 7;
+
+        MESSAGE = 9;
+        FLOW = 11;
+
+        SUCCESS = 13; // general operation results
+        ERROR = 14;
 
         PRODUCER_SUCCESS = 17;
 
@@ -20,14 +29,22 @@ message BaseCommand {
 
         Lookup = 23;
         LookupResponse = 24;
+
+        CONSUMER_STATS_RESPONSE = 26;
     }
     required Type type = 1;
     optional CommandConnect connect = 2;
     optional CommandConnected connected = 3;
 
+    optional CommandSubscribe subscribe = 4;
     optional CommandProducer producer = 5;
     optional CommandSend send = 6;
     optional CommandSendReceipt send_receipt = 7;
+    optional CommandMessage message = 9;
+    optional CommandFlow flow = 11;
+
+    optional CommandSuccess success = 13;
+    optional CommandError error = 14;
 
     optional CommandProducerSuccess producer_success = 17;
 
@@ -36,14 +53,30 @@ message BaseCommand {
 
     optional CommandLookupTopic lookupTopic = 23;
     optional CommandLookupTopicResponse lookupTopicResponse = 24;
+
+    optional CommandConsumerStatsResponse consumerStatsResponse = 26;
 }
 
 /*
- *
- * client <--- commands ---> broker / proxy
- *
+ * client <--- commands ---> broker
  */
 
+//
+// general
+//
+message CommandSuccess {
+    required uint64 request_id = 1;
+}
+
+message CommandError {
+    required uint64 request_id = 1;
+    required ServerError error = 2;
+    required string message = 3;
+}
+
+//
+// connection
+//
 // handshake logic connection
 message CommandConnect {
     required string client_version = 1;
@@ -53,6 +86,9 @@ message CommandConnected {
     required string server_version = 1;
 }
 
+//
+// lookup
+//
 // partitioned topic metadata
 message CommandPartitionedTopicMetadata {
     required string topic = 1;
@@ -90,6 +126,9 @@ message CommandLookupTopicResponse {
     optional string message = 7;
 }
 
+//
+// produce
+//
 // register producer
 message CommandProducer {
     required string topic = 1;
@@ -128,9 +167,85 @@ message CommandSendReceipt {
     optional MessageIdData message_id = 3;
 }
 
+//
+// message
+//
+message CommandMessage {
+    required uint64 consumer_id = 1;
+    required MessageIdData message_id = 2;
+}
+
 message MessageIdData {
     required uint64 ledgerId = 1;
     required uint64 entryId = 2;
     optional int32 partition = 3 [default = -1]; // not partitioned
     optional int32 batch_index = 4 [default = -1];
+}
+
+//
+// consume
+//
+// register subscription consumers
+message CommandSubscribe {
+    enum SubType {
+        Exclusive = 0;
+    }
+    required string topic = 1;
+    required string subscription = 2;
+    required SubType subType = 3;
+
+    required uint64 consumer_id = 4;
+    required uint64 request_id = 5;
+    optional string consumer_name = 6;
+
+    enum InitialPosition {
+        Latest = 0;
+        Earliest = 1;
+    }
+    optional InitialPosition initialPosition = 13 [default = Latest];
+}
+
+// succeed with stats
+message CommandConsumerStatsResponse {
+    required uint64 request_id = 1;
+
+    optional string consumer_name = 5;
+}
+
+// flow
+message CommandFlow {
+    required uint64 consumer_id = 1;
+    required uint32 messagePermits = 2; // prefetch
+}
+
+//
+// others
+//
+enum ServerError {
+    UnknownError = 0;
+    MetadataError = 1; // Error with ZK/metadata
+    PersistenceError = 2; // Error writing reading from BK
+    AuthenticationError = 3; // Non valid authentication
+    AuthorizationError = 4; // Not authorized to use resource
+
+    ConsumerBusy = 5; // Unable to subscribe/unsubscribe because other consumers are connected
+    ServiceNotReady = 6; // Any error that requires client retry operation with a fresh lookup
+    ProducerBlockedQuotaExceededError = 7; // Unable to create producer because backlog quota exceeded
+    ProducerBlockedQuotaExceededException = 8; // Exception while creating producer because quota exceeded
+    ChecksumError = 9; // Error while verifying message checksum
+    UnsupportedVersionError = 10; // Error when an older client/version doesn't support a required feature
+    TopicNotFound = 11; // Topic not found
+    SubscriptionNotFound = 12; // Subscription not found
+    ConsumerNotFound = 13; // Consumer not found
+    TooManyRequests = 14; // Error with too many simultaneously request
+    TopicTerminatedError = 15; // The topic has been terminated
+
+    ProducerBusy = 16; // Producer with same name is already connected
+    InvalidTopicName = 17; // The topic name is not valid
+
+    IncompatibleSchema = 18; // Specified schema was incompatible with topic schema
+    ConsumerAssignError = 19; // Dispatcher assign consumer error
+
+    TransactionCoordinatorNotFound = 20; // Transaction coordinator not found error
+    InvalidTxnStatus = 21; // Invalid txn status error
 }
