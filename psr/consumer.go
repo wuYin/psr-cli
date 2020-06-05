@@ -1,7 +1,6 @@
 package psr
 
 import (
-	"github.com/k0kubun/pp"
 	"sync/atomic"
 )
 
@@ -13,8 +12,10 @@ type Consumer struct {
 	lp      *Lookuper
 	subName string // subscription name
 
-	msgsCh chan []*message
-	cid    uint64
+	msgCh chan *message // consumer only take one msg at a time, partition consumer will do flow control
+	cid   uint64
+
+	maxQueue int // max cache message size
 }
 
 func NewConsumer(broker, topic, subName string) *Consumer {
@@ -22,14 +23,16 @@ func NewConsumer(broker, topic, subName string) *Consumer {
 	if err != nil {
 		panic(err)
 	}
+	maxQueue := 100
 	c := &Consumer{
-		broker:  broker,
-		topic:   topic,
-		cli:     cli,
-		lp:      newLookuper(cli),
-		subName: subName,
-		msgsCh:  make(chan []*message, 100),
-		cid:     0,
+		broker:   broker,
+		topic:    topic,
+		cli:      cli,
+		lp:       newLookuper(cli),
+		subName:  subName,
+		maxQueue: maxQueue,
+		msgCh:    make(chan *message, maxQueue),
+		cid:      0,
 	}
 
 	if err = c.initPartitionConsumers(); err != nil {
@@ -39,11 +42,8 @@ func NewConsumer(broker, topic, subName string) *Consumer {
 }
 
 func (c *Consumer) Receive() (*message, error) {
-	msgs := <-c.msgsCh
-	if len(msgs) > 1 {
-		pp.Println("overload: ", len(msgs))
-	}
-	return msgs[0], nil
+	msg := <-c.msgCh
+	return msg, nil
 }
 
 func (c *Consumer) initPartitionConsumers() error {
@@ -51,8 +51,10 @@ func (c *Consumer) initPartitionConsumers() error {
 	if err != nil {
 		return err
 	}
-	for i, t := range topics {
-		pc := newPartitionConsumer(c, t, i)
+
+	avgQueueSize := c.maxQueue / len(topics)
+	for p, t := range topics {
+		pc := newPartitionConsumer(c, t, p, avgQueueSize)
 		if err = pc.register(); err != nil {
 			return err
 		}

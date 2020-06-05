@@ -28,14 +28,14 @@ type Connection struct {
 	buf    []byte
 	sendCh chan *sendReq
 	recvCh chan *recvResp
-	queue  map[uint64]*sendReq // reqId -> notifyCh
+	sent   map[uint64]*sendReq // reqId -> notifyCh
 
 	receiptCh chan *messageID // dispatch message receipt to producer
 	msgsCh    chan []*message // dispatch messages to consumer
 }
 
 var (
-	handshakeReqId uint64 = 0 // only for queue key usage
+	handshakeReqId uint64 = 0 // only for sent key usage
 )
 
 func NewConnection(conn net.Conn, receiptCh chan *messageID, msgsCh chan []*message) (*Connection, error) {
@@ -44,7 +44,7 @@ func NewConnection(conn net.Conn, receiptCh chan *messageID, msgsCh chan []*mess
 		buf:    nil,
 		sendCh: make(chan *sendReq, 100),
 		recvCh: make(chan *recvResp, 100),
-		queue:  make(map[uint64]*sendReq),
+		sent:  make(map[uint64]*sendReq),
 
 		receiptCh: receiptCh,
 		msgsCh:    msgsCh,
@@ -65,15 +65,15 @@ func (c *Connection) eventloop() {
 		case r := <-c.recvCh:
 			switch r.cmd.GetType() {
 			case pb.BaseCommand_SUCCESS: // one-way operation, such as close producer
-				c.queue[r.cmd.GetSuccess().GetRequestId()].notifyCh <- r
+				c.sent[r.cmd.GetSuccess().GetRequestId()].notifyCh <- r
 			case pb.BaseCommand_CONNECTED: // handshake
-				c.queue[handshakeReqId].notifyCh <- r
+				c.sent[handshakeReqId].notifyCh <- r
 			case pb.BaseCommand_PARTITIONED_METADATA_RESPONSE: // partitions
-				c.queue[r.cmd.GetPartitionMetadataResponse().GetRequestId()].notifyCh <- r
+				c.sent[r.cmd.GetPartitionMetadataResponse().GetRequestId()].notifyCh <- r
 			case pb.BaseCommand_LOOKUP_RESPONSE:
-				c.queue[r.cmd.GetLookupTopicResponse().GetRequestId()].notifyCh <- r
+				c.sent[r.cmd.GetLookupTopicResponse().GetRequestId()].notifyCh <- r
 			case pb.BaseCommand_PRODUCER_SUCCESS:
-				c.queue[r.cmd.GetProducerSuccess().GetRequestId()].notifyCh <- r
+				c.sent[r.cmd.GetProducerSuccess().GetRequestId()].notifyCh <- r
 			case pb.BaseCommand_SEND_RECEIPT:
 				mid := r.cmd.GetSendReceipt().GetMessageId()
 				c.receiptCh <- &messageID{
@@ -94,7 +94,7 @@ func (c *Connection) eventloop() {
 			}
 		case req := <-c.sendCh:
 			if req.reqId != nil {
-				c.queue[*req.reqId] = req // shot cmd never enqueue
+				c.sent[*req.reqId] = req // shot cmd never record to sent map
 			}
 			err := c.writeCmd(req.cmd)
 			if err != nil {

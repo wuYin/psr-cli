@@ -9,7 +9,7 @@ func main() {
 	p := psr.NewProducer("127.0.0.1:6650", "persistent://psr/default/topic-01")
 	defer p.Close()
 	for i := 0; i < 10; i++ {
-		msgId, err := p.Send(psr.NewMsg([]byte("A")))
+		msgId, err := p.Send(psr.NewMsg([]byte(fmt.Sprintf("MESSAGE_%d", i))))
 		if err != nil {
 			panic(err)
 		}

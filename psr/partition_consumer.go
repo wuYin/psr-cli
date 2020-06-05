@@ -16,9 +16,12 @@ type partitionConsumer struct {
 
 	readyCh chan struct{}
 	msgsCh  chan []*message
+
+	maxPermit  int
+	usedPermit int
 }
 
-func newPartitionConsumer(c *Consumer, topic string, partition int) *partitionConsumer {
+func newPartitionConsumer(c *Consumer, topic string, partition int, maxPermit int) *partitionConsumer {
 	pc := &partitionConsumer{
 		c:         c,
 		cli:       nil,
@@ -29,6 +32,9 @@ func newPartitionConsumer(c *Consumer, topic string, partition int) *partitionCo
 
 		readyCh: make(chan struct{}),
 		msgsCh:  make(chan []*message, 10),
+
+		maxPermit:  maxPermit,
+		usedPermit: 0,
 	}
 	go pc.flowLoop()
 
@@ -36,14 +42,30 @@ func newPartitionConsumer(c *Consumer, topic string, partition int) *partitionCo
 }
 
 func (c *partitionConsumer) flowLoop() {
+	var queue []*message
 	for {
+		var (
+			inCh    chan []*message
+			outCh   chan *message
+			nextMsg *message
+		)
+
+		if len(queue) == 0 {
+			inCh = c.msgsCh // now start next turn and get more
+		} else {
+			outCh = c.c.msgCh // now bubble to consumer
+			nextMsg = queue[0]
+		}
+
+		// inCh and outCh are mutually exclusive, sequential actually
 		select {
 		case _, ok := <-c.readyCh:
 			if !ok {
 				return
 			}
-			c.flow(1) // expect just 1
-		case msgs, ok := <-c.msgsCh:
+			c.flow(c.maxPermit) // init permit all
+
+		case msgs, ok := <-inCh:
 			if !ok {
 				return
 			}
@@ -51,18 +73,27 @@ func (c *partitionConsumer) flowLoop() {
 				msgs[i].topic = c.topic
 				msgs[i].msgId.partitionIdx = c.partition
 			}
-			c.c.msgsCh <- msgs
+			pp.Printf("consumer %s recv %s msgs, want %s\n", int(c.cid), len(msgs), c.maxPermit-c.usedPermit)
+			queue = msgs
+			c.usedPermit += len(queue)
+
+		case outCh <- nextMsg:
+			queue = queue[1:]
+			c.usedPermit--
+			if c.usedPermit < (c.maxPermit / 2) { // get another half and wait msgs from inCh
+				c.flow(c.maxPermit - c.usedPermit)
+			}
 		}
 	}
 }
 
-func (c *partitionConsumer) flow(permit uint32) {
+func (c *partitionConsumer) flow(permit int) {
 	t := pb.BaseCommand_FLOW
 	cmd := &pb.BaseCommand{
 		Type: &t,
 		Flow: &pb.CommandFlow{
 			ConsumerId:     proto.Uint64(c.cid),
-			MessagePermits: proto.Uint32(permit),
+			MessagePermits: proto.Uint32(uint32(permit)),
 		},
 	}
 	c.cli.conn.shotCmd(cmd)
