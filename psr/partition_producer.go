@@ -17,9 +17,13 @@ type partitionProducer struct {
 	partition int
 
 	receiptCh chan *messageID
+
+	maxBatch int    // max number of single msgs in one batch
+	batch    []byte // batch cache
+	batched  int
 }
 
-func newPartitionProducer(p *Producer, topic string, partition int) *partitionProducer {
+func newPartitionProducer(p *Producer, topic string, partition, maxBatch int) *partitionProducer {
 	return &partitionProducer{
 		p:         p,
 		topic:     topic,
@@ -28,6 +32,10 @@ func newPartitionProducer(p *Producer, topic string, partition int) *partitionPr
 		partition: partition,
 
 		receiptCh: make(chan *messageID, 10),
+
+		maxBatch: maxBatch,
+		batch:    nil,
+		batched:  0,
 	}
 }
 
@@ -77,33 +85,40 @@ func (p *partitionProducer) transferReceipts() {
 // send serialized pkg to broker directly
 // notice: send operation is async, so message pkg does not contain a requestId, it's unnecessary
 func (p *partitionProducer) send(msg *message) error {
+	payload, err := serializeSingleMsg(msg.content)
+	if err != nil {
+		return err
+	}
+
+	if p.batched < p.maxBatch {
+		p.batch = append(p.batch, payload...)
+		p.batched++
+		return nil
+	}
+
 	// cmd send
 	seqId := p.nextSeqId()
 	t := pb.BaseCommand_SEND
 	sendCmd := &pb.BaseCommand{
 		Type: &t,
 		Send: &pb.CommandSend{
-			ProducerId: proto.Uint64(p.prodId),
-			SequenceId: proto.Uint64(seqId),
-			NumMessage: proto.Int32(1),
+			ProducerId:  proto.Uint64(p.prodId),
+			SequenceId:  proto.Uint64(seqId),
+			NumMessages: proto.Int32(int32(p.batched)),
 		},
 	}
 
 	// batch message meta
 	msgMeta := &pb.MessageMetadata{
-		ProducerName: proto.String(p.name),
-		SequenceId:   proto.Uint64(seqId),
-		PublishTime:  proto.Uint64(uint64(nowMsTs())), // current ms ts
-	}
-
-	// produce content as a single msg
-	payload, err := serializeSingleMsg(msg.content)
-	if err != nil {
-		return err
+		ProducerName:       proto.String(p.name),
+		SequenceId:         proto.Uint64(seqId),
+		PublishTime:        proto.Uint64(uint64(nowMsTs())), // current ms ts
+		NumMessagesInBatch: proto.Int32(int32(p.batched)),
 	}
 
 	// serialized to batch to raw pkg
-	batch, err := serializeBatch(sendCmd, msgMeta, payload)
+	pp.Println(int(p.prodId), " sending ", string(p.batch))
+	batch, err := serializeBatch(sendCmd, msgMeta, p.batch)
 	if err != nil {
 		return err
 	}
@@ -113,6 +128,9 @@ func (p *partitionProducer) send(msg *message) error {
 		return err
 	}
 	_ = n
+
+	p.batch = nil // reset for next batch
+	p.batched = 0
 	return nil
 }
 

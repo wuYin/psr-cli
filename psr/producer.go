@@ -14,6 +14,8 @@ type Producer struct {
 
 	ps        map[uint64]*partitionProducer // producer_id -> producer
 	receiptCh chan *messageID
+
+	batchSize int
 }
 
 func NewProducer(broker, topic string) *Producer {
@@ -56,6 +58,18 @@ func (p *Producer) Send(msg *message) (*messageID, error) {
 	return msgId, nil
 }
 
+func (p *Producer) AsyncSend(msg *message) {
+	var pp *partitionProducer
+	for _, pp = range p.ps { // FIXME: map range not random well in the beginning actually
+		break
+	}
+	if pp == nil {
+		print("no producer available")
+		return
+	}
+	pp.send(msg)
+}
+
 func (p *Producer) Close() {
 	for _, pp := range p.ps {
 		pp.close()
@@ -67,8 +81,11 @@ func (p *Producer) initPartitionProducers() error {
 	if err != nil {
 		return err
 	}
+
+	maxBatch := 4
+	avgBatch := maxBatch / len(topics)
 	for i, t := range topics {
-		pp := newPartitionProducer(p, t, i)
+		pp := newPartitionProducer(p, t, i, avgBatch)
 		if err = pp.register(); err != nil {
 			return err
 		}

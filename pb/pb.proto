@@ -156,13 +156,15 @@ message MessageMetadata {
     required string producer_name = 1;
     required uint64 sequence_id = 2;
     required uint64 publish_time = 3;
+
+    optional int32 num_messages_in_batch = 11 [default = 1]; // mark payload single msg counts
 }
 
 // send
 message CommandSend {
     required uint64 producer_id = 1;
     required uint64 sequence_id = 2;
-    optional int32 num_message = 3 [default = 1];
+    optional int32 num_messages = 3 [default = 1];
 }
 
 message CommandSendReceipt {

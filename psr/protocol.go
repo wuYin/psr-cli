@@ -64,20 +64,21 @@ func serializeSingleMsg(content []byte) ([]byte, error) {
 	return payload, nil
 }
 
-func unserializeSingleMsg(buf []byte) ([]byte, error) {
+// TODO: reduce return arguments
+func unserializeSingleMsg(buf []byte) ([]byte, int, error) {
 	metaSize := binary.BigEndian.Uint32(buf)
 	buf = buf[4:]
 
 	rawMeta := buf[:metaSize]
 	var singleMeta pb.SingleMessageMetadata
 	if err := proto.Unmarshal(rawMeta, &singleMeta); err != nil {
-		return nil, err
+		return nil, 0, err
 	}
-	_ = singleMeta // just abandon
 
-	buf = buf[metaSize:]
+	l := metaSize
+	r := metaSize + uint32(singleMeta.GetPayloadSize())
 
-	return buf, nil
+	return buf[l:r], int(4 + r), nil
 }
 
 //
@@ -162,23 +163,32 @@ func unserializeBatch(h *pb.CommandMessage, p []byte) ([]*message, error) {
 	}
 	p = p[metaSize:]
 
-	// single msg
-	content, err := unserializeSingleMsg(p)
-	if err != nil {
-		return nil, err
+	// read batched single messages
+	n := batchMeta.GetNumMessagesInBatch()
+	if n == 0 {
+		n = 1
+	}
+	msgs := make([]*message, n)
+	for i := 0; i < int(n); i++ {
+		content, read, err := unserializeSingleMsg(p)
+		if err != nil {
+			return nil, err
+		}
+		p = p[read:] // move to next single msg
+
+		mid := h.GetMessageId()
+		msgs[i] = &message{
+			publishTim: convMsTs(batchMeta.GetPublishTime()),
+			msgId: &messageID{
+				partitionIdx: -1, // same as producer, must be filled by partitioned consumer
+				ledgerId:     int64(mid.GetLedgerId()),
+				batchIdx:     -1,
+				entryId:      int64(mid.GetEntryId()),
+			},
+			content: content,
+			topic:   "",
+		}
 	}
 
-	mid := h.GetMessageId()
-	msg := &message{
-		publishTim: convMsTs(batchMeta.GetPublishTime()),
-		msgId: &messageID{
-			partitionIdx: -1, // same as producer, must be filled by partitioned consumer
-			ledgerId:     int64(mid.GetLedgerId()),
-			batchIdx:     -1,
-			entryId:      int64(mid.GetEntryId()),
-		},
-		content: content,
-		topic:   "",
-	}
-	return []*message{msg}, nil
+	return msgs, nil
 }

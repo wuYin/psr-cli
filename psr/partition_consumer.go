@@ -41,6 +41,7 @@ func newPartitionConsumer(c *Consumer, topic string, partition int, maxPermit in
 	return pc
 }
 
+// switch inCh and outCh to do flow control
 func (c *partitionConsumer) flowLoop() {
 	var queue []*message
 	for {
