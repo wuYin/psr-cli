@@ -7,6 +7,8 @@ Reference
 
 Schedule
 
-- [x] basic produce
-- [x] basic consume
-- [x] message batching
+- [x] produce
+    - batch queue
+- [x] consume
+    - flow control
+    - individual ACK
