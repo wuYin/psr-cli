@@ -22,6 +22,10 @@ func (m *message) String() string {
 	return fmt.Sprintf("[%s] [%s] %s %q", m.publishTim.Format("2006-01-02 15:04:05"), m.topic, m.msgId, m.content)
 }
 
+func (m *message) GetMessageId() *messageID {
+	return m.msgId
+}
+
 // message -> [partition, ledger, batch, entry]
 type messageID struct {
 	partitionIdx int

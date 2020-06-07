@@ -117,7 +117,6 @@ func (p *partitionProducer) send(msg *message) error {
 	}
 
 	// serialized to batch to raw pkg
-	pp.Println(int(p.prodId), " sending ", string(p.batch))
 	batch, err := serializeBatch(sendCmd, msgMeta, p.batch)
 	if err != nil {
 		return err

@@ -17,6 +17,7 @@ message BaseCommand {
         SEND_RECEIPT = 7;
 
         MESSAGE = 9;
+        ACK = 10;
         FLOW = 11;
 
         SUCCESS = 13; // general operation results
@@ -43,6 +44,7 @@ message BaseCommand {
     optional CommandSend send = 6;
     optional CommandSendReceipt send_receipt = 7;
     optional CommandMessage message = 9;
+    optional CommandAck ack = 10;
     optional CommandFlow flow = 11;
 
     optional CommandSuccess success = 13;
@@ -228,6 +230,18 @@ message CommandConsumerStatsResponse {
 message CommandFlow {
     required uint64 consumer_id = 1;
     required uint32 messagePermits = 2; // prefetch
+}
+
+// ack
+message CommandAck {
+    enum AckType {
+        Individual = 0;
+    }
+
+    required uint64 consumer_id = 1;
+    required AckType ack_type = 2;
+
+    repeated MessageIdData message_id = 3; // a list message ids
 }
 
 //

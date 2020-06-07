@@ -100,6 +100,26 @@ func (c *partitionConsumer) flow(permit int) {
 	c.cli.conn.shotCmd(cmd)
 }
 
+func (c *partitionConsumer) ack(msgId *messageID) {
+	t := pb.BaseCommand_ACK
+	mid := &pb.MessageIdData{
+		LedgerId:   proto.Uint64(uint64(msgId.ledgerId)),
+		EntryId:    proto.Uint64(uint64(msgId.entryId)),
+		Partition:  proto.Int32(-1), // broker will do this
+		BatchIndex: proto.Int32(-1),
+	}
+	cmd := &pb.BaseCommand{
+		Type: &t,
+		Ack: &pb.CommandAck{
+			ConsumerId: proto.Uint64(c.cid),
+			AckType:    pb.CommandAck_Individual.Enum(),
+			MessageId:  []*pb.MessageIdData{mid},
+		},
+	}
+	pp.Println(int(c.cid), "ack -> ", msgId.String())
+	c.cli.conn.shotCmd(cmd)
+}
+
 func (c *partitionConsumer) register() error {
 	broker, err := c.c.lp.lookup(c.topic)
 	if err != nil {

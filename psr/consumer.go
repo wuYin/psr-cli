@@ -46,6 +46,13 @@ func (c *Consumer) Receive() (*message, error) {
 	return msg, nil
 }
 
+func (c *Consumer) Ack(msgId *messageID) {
+	if msgId.partitionIdx >= len(c.cs) {
+		return
+	}
+	c.cs[msgId.partitionIdx].ack(msgId)
+}
+
 func (c *Consumer) initPartitionConsumers() error {
 	topics, err := c.cli.partitionTopics(c.topic)
 	if err != nil {
