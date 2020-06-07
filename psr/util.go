@@ -33,3 +33,7 @@ func convMsTs(ts uint64) time.Time {
 	nsec := t - (sec * int64(time.Second))
 	return time.Unix(sec, nsec)
 }
+
+func fmtTime(t time.Time) string {
+	return t.Format("2006-01-02 15:04:05")
+}

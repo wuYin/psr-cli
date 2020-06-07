@@ -7,6 +7,7 @@ import (
 	"io"
 	"net"
 	"psr-cli/pb"
+	"time"
 )
 
 type notifyCh chan *recvResp
@@ -32,10 +33,15 @@ type Connection struct {
 
 	receiptCh chan *messageID // dispatch message receipt to producer
 	msgsCh    chan []*message // dispatch messages to consumer
+
+	lastAliveAt  time.Time // check broker alive or not
+	pingTicker   *time.Ticker
+	aliveChecker *time.Ticker
 }
 
 var (
 	handshakeReqId uint64 = 0 // only for sent key usage
+	pingInterval          = 30 * time.Second
 )
 
 func NewConnection(conn net.Conn, receiptCh chan *messageID, msgsCh chan []*message) (*Connection, error) {
@@ -44,12 +50,16 @@ func NewConnection(conn net.Conn, receiptCh chan *messageID, msgsCh chan []*mess
 		buf:    nil,
 		sendCh: make(chan *sendReq, 100),
 		recvCh: make(chan *recvResp, 100),
-		sent:  make(map[uint64]*sendReq),
+		sent:   make(map[uint64]*sendReq),
 
 		receiptCh: receiptCh,
 		msgsCh:    msgsCh,
+
+		pingTicker:   time.NewTicker(pingInterval),
+		aliveChecker: time.NewTicker(2 * pingInterval),
 	}
 	go c.eventloop()
+	go c.checkAlive()
 
 	if err := c.handshake(); err != nil {
 		return nil, err
@@ -58,11 +68,23 @@ func NewConnection(conn net.Conn, receiptCh chan *messageID, msgsCh chan []*mess
 	return c, nil
 }
 
+func (c *Connection) checkAlive() {
+	for {
+		select {
+		case <-c.aliveChecker.C:
+			if c.lastAliveAt.Before(time.Now().Add(-2 * pingInterval)) {
+				pp.Println("broker down sine ", fmtTime(c.lastAliveAt))
+			}
+		}
+	}
+}
+
 func (c *Connection) eventloop() {
 	go c.readCmd()
 	for {
 		select {
 		case r := <-c.recvCh:
+			c.lastAliveAt = time.Now()
 			switch r.cmd.GetType() {
 			case pb.BaseCommand_SUCCESS: // one-way operation, such as close producer
 				c.sent[r.cmd.GetSuccess().GetRequestId()].notifyCh <- r
@@ -85,10 +107,18 @@ func (c *Connection) eventloop() {
 			case pb.BaseCommand_MESSAGE:
 				msgs, err := unserializeBatch(r.cmd.GetMessage(), r.payload)
 				if err != nil {
-					pp.Println("unserialized failed: ", err)
+					pp.Println("unserialize failed: ", err)
 					return
 				}
 				c.msgsCh <- msgs
+			case pb.BaseCommand_PING:
+				pong := &pb.BaseCommand{
+					Type: pb.BaseCommand_PONG.Enum(),
+					Pong: &pb.CommandPong{},
+				}
+				c.shotCmd(pong)
+			case pb.BaseCommand_PONG:
+				pp.Println("recv pong from", c.conn.RemoteAddr().String())
 			default:
 				pp.Println("ignored pkg type:", r.cmd.GetType())
 			}
@@ -100,6 +130,12 @@ func (c *Connection) eventloop() {
 			if err != nil {
 				pp.Println("conn write cmd failed:", err)
 			}
+		case <-c.pingTicker.C:
+			cmd := &pb.BaseCommand{
+				Type: pb.BaseCommand_PING.Enum(),
+				Ping: &pb.CommandPing{},
+			}
+			c.shotCmd(cmd)
 		}
 	}
 }
@@ -133,6 +169,8 @@ func (c *Connection) handshake() error {
 		return resp.err
 	}
 	pp.Println("handshake ", *resp.cmd.Connected.ServerVersion)
+
+	c.lastAliveAt = time.Now()
 	return nil
 }
 

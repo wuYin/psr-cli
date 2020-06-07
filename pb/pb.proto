@@ -27,6 +27,9 @@ message BaseCommand {
 
         PRODUCER_SUCCESS = 17;
 
+        PING = 18;
+        PONG = 19;
+
         PARTITIONED_METADATA = 21;
         PARTITIONED_METADATA_RESPONSE = 22;
 
@@ -52,6 +55,9 @@ message BaseCommand {
     optional CommandCloseProducer close_producer = 15;
 
     optional CommandProducerSuccess producer_success = 17;
+
+    optional CommandPing ping = 18;
+    optional CommandPong pong = 19;
 
     optional CommandPartitionedTopicMetadata partitionMetadata = 21;
     optional CommandPartitionedTopicMetadataResponse partitionMetadataResponse = 22;
@@ -242,6 +248,15 @@ message CommandAck {
     required AckType ack_type = 2;
 
     repeated MessageIdData message_id = 3; // a list message ids
+}
+
+//
+// stay alive
+//
+message CommandPing {
+}
+
+message CommandPong {
 }
 
 //
