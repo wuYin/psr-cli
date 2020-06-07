@@ -18,20 +18,22 @@ type Consumer struct {
 	maxPermit int // max cache message size
 }
 
-func NewConsumer(broker, topic, subName string) *Consumer {
-	cli, err := newClient(broker, nil, nil)
+func NewConsumer(conf *ConsumerConf) *Consumer {
+	if conf == nil || !conf.check() {
+		panic("invalid consumer config")
+	}
+	cli, err := newClient(conf.Broker, nil, nil)
 	if err != nil {
 		panic(err)
 	}
-	maxPermit := 100
 	c := &Consumer{
-		broker:    broker,
-		topic:     topic,
+		broker:    conf.Broker,
+		topic:     conf.Topic,
 		cli:       cli,
 		lp:        newLookuper(cli),
-		subName:   subName,
-		maxPermit: maxPermit,
-		msgCh:     make(chan *message, maxPermit),
+		subName:   conf.SubName,
+		maxPermit: conf.MaxPermit,
+		msgCh:     make(chan *message, conf.MaxPermit),
 		cid:       0,
 	}
 

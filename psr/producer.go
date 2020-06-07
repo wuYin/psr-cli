@@ -2,6 +2,7 @@ package psr
 
 import (
 	"errors"
+	"github.com/k0kubun/pp"
 	"sync/atomic"
 )
 
@@ -15,23 +16,30 @@ type Producer struct {
 	ps        map[uint64]*partitionProducer // producer_id -> producer
 	receiptCh chan *messageID
 
-	batchSize int
+	maxBatch int
 }
 
-func NewProducer(broker, topic string) *Producer {
-	cli, err := newClient(broker, nil, nil)
+func NewProducer(conf *ProducerConf) *Producer {
+	if conf == nil || !conf.check() {
+		pp.Println("invalid producer config")
+		return nil
+	}
+
+	cli, err := newClient(conf.Broker, nil, nil)
 	if err != nil {
 		panic(err)
 	}
 	p := &Producer{
-		broker: broker,
-		topic:  topic,
+		broker: conf.Broker,
+		topic:  conf.Topic,
 		cli:    cli,
 		lp:     newLookuper(cli),
 		prodId: 0,
 
 		ps:        make(map[uint64]*partitionProducer),
 		receiptCh: make(chan *messageID, 10),
+
+		maxBatch: conf.MaxBatch,
 	}
 	if err := p.initPartitionProducers(); err != nil {
 		panic(err)
@@ -82,8 +90,7 @@ func (p *Producer) initPartitionProducers() error {
 		return err
 	}
 
-	maxBatch := 4
-	avgBatch := maxBatch / len(topics)
+	avgBatch := p.maxBatch / len(topics)
 	for i, t := range topics {
 		pp := newPartitionProducer(p, t, i, avgBatch)
 		if err = pp.register(); err != nil {

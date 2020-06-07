@@ -19,7 +19,13 @@ func main() {
 		n, _ = strconv.Atoi(os.Args[2])
 	}
 
-	c := psr.NewConsumer("127.0.0.1:6650", "persistent://psr/default/topic-01", subName)
+	conf := psr.ConsumerConf{
+		Broker:    "127.0.0.1:6650",
+		Topic:     "persistent://psr/default/topic-01",
+		SubName:   subName,
+		MaxPermit: 4,
+	}
+	c := psr.NewConsumer(&conf)
 	for i := 0; i < n; i++ {
 		msg, err := c.Receive()
 		if err != nil {
